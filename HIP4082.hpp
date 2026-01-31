@@ -1,12 +1,12 @@
 /*
-Cabeçalho responsável pelo controle do driver de motor A3941.
+Cabeçalho responsável pelo controle do driver de motor HIP4082.
 */
 
 #pragma once
 
 #include <Arduino.h>
 
-// Classe para controlar motores que utilizam o driver A3941
+// Classe para controlar motores que utilizam o driver HIP4082
 class HIP4082 {
     private:
 
@@ -15,7 +15,6 @@ class HIP4082 {
     int _pinoBHI; //PWM B High-Side
     int _pinoALI; //PWM A Low-Side
     int _pinoBLI; //PWM B Low-Side
-    int _pinoEN; //ENABLE(ou PHASE)
 
     //Canais PWM
     int _canalAHI;
@@ -28,6 +27,7 @@ class HIP4082 {
 
     //Potencia atual
     int _potencia = 0;
+
     public:
 
     bool motorInvertido = false;
@@ -39,7 +39,6 @@ class HIP4082 {
      * @param pinoBHI Número do pino PWM B High-Side.
      * @param pinoALI Número do pino PWM A Low-Side.
      * @param pinoBLI Número do pino PWM B Low-Side.
-     * @param pinoEN  Número do pino ENABLE do driver.
      * @param canalAHI Canal PWM para o pino A High-Side.
      * @param canalBHI Canal PWM para o pino B High-Side.
      * @param canalALI Canal PWM para o pino A Low-Side.
@@ -47,15 +46,19 @@ class HIP4082 {
      * @param frequenciaDoSinalDePWM Frequência do sinal PWM.
      * @param resolucao Número de bits da resolução do sinal PWM (ex: 12 bits = 0 a 4095).
      */
-    HIP4082(int pinoAHI,int pinoBHI, int pinoALI, int pinoBLI, int pinoEN, int canalAHI, int canalBHI,int canalALI, int canalBLI, int frequenciaDoSinalDePWM, int resolucao):
+    HIP4082(int pinoAHI,int pinoBHI, int pinoALI, int pinoBLI, int canalAHI, int canalBHI,int canalALI, int canalBLI, int frequenciaDoSinalDePWM, int resolucao):
         // Atribui os valores passados nos atributos
         _pinoAHI(pinoAHI),
         _pinoBHI(pinoBHI),
         _pinoALI(pinoALI),
         _pinoBLI(pinoBLI),
-        _pinoEN(pinoEN),
+        _canalAHI(canalAHI),
+        _canalBHI(canalBHI),
+        _canalALI(canalALI),
+        _canalBLI(canalBLI),
 
-        _valorMaximoDePotencia(pow(2,resolucao)-1)
+        //Define o valor máximo de PWM a partir da resolução passada
+        _valorMaximoDePotencia(pow(2, resolucao) - 1)
 
     {
         // Configura os canais PWM
@@ -70,8 +73,6 @@ class HIP4082 {
         ledcAttachPin(_pinoALI, _canalALI);
         ledcAttachPin(_pinoBLI, _canalBLI);
 
-        // Define o modo OUTPUT para o pino ENABLE
-        pinMode(_pinoEN, OUTPUT);
 
         // Para o motor
         parar();
@@ -83,43 +84,42 @@ class HIP4082 {
      * @param potencia Valor da potência, na qual varia no intervalo [-valorMaximoDePotencia, valorMaximoDePotencia], para aplicar no motor. Para valores positivos o motor gira em um sentido, para valores negativos o motor gira no sentido contrário.
      */
     void setPotencia(int potencia) {
+        if (abs(potencia) <= getValorMaximoDePotencia()){
+            // Se o motor estiver invertido, inverte o valor da potência
+            if (motorInvertido) {
+                potencia = -potencia;
+            }
 
-        // Se o motor estiver invertido, inverte o valor da potência
-        if (motorInvertido) {
-            potencia = -potencia;
-        }
+            // Se a potência passada for positiva, escreve esse valor no canal do pino ALI e BHI
+            if (potencia > 0) {
+                ledcWrite(_canalAHI, 0);
+                ledcWrite(_canalALI, potencia);
+                ledcWrite(_canalBHI, potencia);
+                ledcWrite(_canalBLI, 0);
+            }
+            // Senão, se a potência passada for negativa, escreve o valor absoluto desse valor nos pinos AHI e BLI
+            else if (potencia < 0) {
+                ledcWrite(_canalAHI, abs(potencia));
+                ledcWrite(_canalALI, 0);
+                ledcWrite(_canalBHI, 0);
+                ledcWrite(_canalBLI, abs(potencia));
+            }
+            // Senão, se o valor de potência for 0, freia o motor escrevendo o valor 0 no canal do pino PWMH
+            else {
+                ledcWrite(_canalAHI, 0);
+                ledcWrite(_canalALI, 0);
+                ledcWrite(_canalBHI, 0);
+                ledcWrite(_canalBLI, 0);
+            }
 
-        // Se a potência passada for positiva, escreve esse valor no canal do pino PWMH e escreve LOW no pino PHASE do driver de motor
-        if (potencia > 0) {
-            ledcWrite(_canalAHI, 0);
-            ledcWrite(_canalALI, potencia);
-            ledcWrite(_canalBHI, potencia);
-            ledcWrite(_canalBLI, 0);
-            digitalWrite(_pinoEN, LOW);
-        }
-        // Senão, se a potência passada for negativa, escreve o valor absoluto desse valor no canal do pino PWMH e escreve HIGH no pino PHASE do driver de motor
-        else if (potencia < 0) {
-            ledcWrite(_canalAHI, abs(potencia));
-            ledcWrite(_canalALI, 0);
-            ledcWrite(_canalBHI, 0);
-            ledcWrite(_canalBLI, abs(potencia));
-            digitalWrite(_pinoEN, HIGH);
-        }
-        // Senão, se o valor de potência for 0, freia o motor escrevendo o valor 0 no canal do pino PWMH
-        else {
-            ledcWrite(_canalAHI, 0);
-            ledcWrite(_canalALI, 0);
-            ledcWrite(_canalBHI, 0);
-            ledcWrite(_canalBLI, 0);
-        }
-
-        // Atualiza o atributo da potência do motor com o valor da potência atual
-        _potencia = potencia;
+            // Atualiza o atributo da potência do motor com o valor da potência atual
+            _potencia = potencia;
+        } 
     }
 
     // Método para parar o motor
     void parar() {
-        // Freia o motor escrevendo o valor 0 no canal do pino PWMH
+        // Freia o motor escreven+do o valor 0 no canal do pino PWMH
         ledcWrite(_canalAHI, 0);
         ledcWrite(_canalALI, 0);
         ledcWrite(_canalBHI, 0);
@@ -144,19 +144,6 @@ class HIP4082 {
      */
     int getPotencia() {
         return _potencia;
-    }
-
-    void setCanalAHI(int novoCanal) {
-        _canalAHI = novoCanal;
-    }
-    void setCanalBHI(int novoCanal) {
-        _canalBHI = novoCanal;
-    }
-    void setCanalALI(int novoCanal) {
-        _canalALI = novoCanal;
-    }
-    void setCanalBLI(int novoCanal) {
-        _canalBLI = novoCanal;
     }
 };
 
