@@ -6,6 +6,13 @@ Cabeçalho responsável pelo controle do driver de motor HIP4082.
 
 #include <Arduino.h>
 
+enum Placa
+{
+    Unificada,
+    Cometa
+}
+
+
 // Classe para controlar motores que utilizam o driver HIP4082
 class HIP4082 {
     private:
@@ -45,34 +52,54 @@ class HIP4082 {
      * @param canalBLI Canal PWM para o pino B Low-Side.
      * @param frequenciaDoSinalDePWM Frequência do sinal PWM.
      * @param resolucao Número de bits da resolução do sinal PWM (ex: 12 bits = 0 a 4095).
+     * @param placa Nome da placa que será utilizada (Unificada ou Cometa)
      */
-    HIP4082(int pinoAHI,int pinoBHI, int pinoALI, int pinoBLI, int canalAHI, int canalBHI,int canalALI, int canalBLI, int frequenciaDoSinalDePWM, int resolucao):
+    HIP4082(int pinoAHI,int pinoBHI, int pinoALI, int pinoBLI, int canalAHI, int canalBHI,int canalALI, int canalBLI, int frequenciaDoSinalDePWM, int resolucao, Placa placa):
         // Atribui os valores passados nos atributos
-        _pinoAHI(pinoAHI),
-        _pinoBHI(pinoBHI),
-        _pinoALI(pinoALI),
-        _pinoBLI(pinoBLI),
-        _canalAHI(canalAHI),
-        _canalBHI(canalBHI),
-        _canalALI(canalALI),
-        _canalBLI(canalBLI),
-
+        if(placa == Cometa){
+            _pinoALI(pinoALI),
+            _pinoBLI(pinoBLI),
+            _canalALI(canalALI),
+            _canalBLI(canalBLI),
+        }
+        
+        else if(placa == Unificada){
+            _pinoAHI(pinoAHI),
+            _pinoBHI(pinoBHI),
+            _pinoALI(pinoALI),
+            _pinoBLI(pinoBLI),
+            _canalAHI(canalAHI),
+            _canalBHI(canalBHI),
+            _canalALI(canalALI),
+            _canalBLI(canalBLI),
+        }
+        
         //Define o valor máximo de PWM a partir da resolução passada
         _valorMaximoDePotencia(pow(2, resolucao) - 1)
 
     {
-        // Configura os canais PWM
-        ledcSetup(_canalAHI, frequenciaDoSinalDePWM, resolucao);
-        ledcSetup(_canalBHI, frequenciaDoSinalDePWM, resolucao);
-        ledcSetup(_canalALI, frequenciaDoSinalDePWM, resolucao);
-        ledcSetup(_canalBLI, frequenciaDoSinalDePWM, resolucao);
+        if (placa == Unificada){
+            // Configura os canais PWM
+            ledcSetup(_canalAHI, frequenciaDoSinalDePWM, resolucao);
+            ledcSetup(_canalBHI, frequenciaDoSinalDePWM, resolucao);
+            ledcSetup(_canalALI, frequenciaDoSinalDePWM, resolucao);
+            ledcSetup(_canalBLI, frequenciaDoSinalDePWM, resolucao);
 
-        // Anexa os canais PWM aos pinos correspondentes
-        ledcAttachPin(_pinoAHI, _canalAHI);
-        ledcAttachPin(_pinoBHI, _canalBHI);
-        ledcAttachPin(_pinoALI, _canalALI);
-        ledcAttachPin(_pinoBLI, _canalBLI);
+            // Anexa os canais PWM aos pinos correspondentes
+            ledcAttachPin(_pinoAHI, _canalAHI);
+            ledcAttachPin(_pinoBHI, _canalBHI);
+            ledcAttachPin(_pinoALI, _canalALI);
+            ledcAttachPin(_pinoBLI, _canalBLI);
+        }
 
+        else if(placa == Cometa){
+            ledcSetup(_canalALI, frequenciaDoSinalDePWM, resolucao);
+            ledcSetup(_canalBLI, frequenciaDoSinalDePWM, resolucao);
+
+            // Anexa os canais PWM aos pinos correspondentes
+            ledcAttachPin(_pinoALI, _canalALI);
+            ledcAttachPin(_pinoBLI, _canalBLI);
+        }
 
         // Para o motor
         parar();
@@ -85,11 +112,13 @@ class HIP4082 {
      */
     void setPotencia(int potencia) {
         if (abs(potencia) <= getValorMaximoDePotencia()){
-            // Se o motor estiver invertido, inverte o valor da potência
-            if (motorInvertido) {
-                potencia = -potencia;
-            }
+                // Se o motor estiver invertido, inverte o valor da potência
+                if (motorInvertido){
+                    potencia = -potencia;
+                }
+        }
 
+        if(placa == Unificada){     
             // Se a potência passada for positiva, escreve esse valor no canal do pino ALI e BHI
             if (potencia > 0) {
                 ledcWrite(_canalAHI, 0);
@@ -111,19 +140,49 @@ class HIP4082 {
                 ledcWrite(_canalBHI, 0);
                 ledcWrite(_canalBLI, 0);
             }
+        }
 
+        if (placa == Cometa){ 
+            // Se a potência passada for positiva, escreve esse valor no canal do pino ALI e passa o seu complemento no BLI
+            // Quando o ALI estiver mandando HIGH, o BLI estará mandando LOW
+            // Isso seria a mesma coisa que colocar uma porta NOT em um dos pinos
+            if(potencia > 0){
+                ledcWrite(_canalALI, potencia);
+                ledcWrite(_canalBLI, getValorMaximoDePotencia - potencia);
+            }
+
+            else if(potencia < 0){
+                ledcWrite(_canalALI, getValorMaximoDePotencia - potencia);
+                ledcWrite(_canalBLI, potencia);
+            }
+
+            else{
+                ledcWrite(_canalALI, 0);
+                ledcWrite(_canalBLI, 0);
+            }
+        }
             // Atualiza o atributo da potência do motor com o valor da potência atual
             _potencia = potencia;
-        } 
-    }
+    } 
+    
 
     // Método para parar o motor
     void parar() {
-        // Freia o motor escreven+do o valor 0 no canal do pino PWMH
-        ledcWrite(_canalAHI, 0);
-        ledcWrite(_canalALI, 0);
-        ledcWrite(_canalBHI, 0);
-        ledcWrite(_canalBLI, 0);
+        if(placa == Unificada){ 
+            // Freia o motor escreven+do o valor 0 no canal do pino PWMH
+            ledcWrite(_canalAHI, 0);
+            ledcWrite(_canalALI, getValorMaximoDePotencia());
+            ledcWrite(_canalBHI, 0);
+            ledcWrite(_canalBLI, getValorMaximoDePotencia());
+        }
+
+        else if(placa == Cometa){
+            // Freia o motor escrevendo o valor 0 no canal do pino PWMH
+            //Testar diferença com ambos os pinos em HIGH
+            ledcWrite(_canalALI, 0);
+            ledcWrite(_canalBLI, 0);
+        }
+
         // Atualiza o atributo da potência do motor com o valor de potência 0
         _potencia = 0;
     }
@@ -146,7 +205,3 @@ class HIP4082 {
         return _potencia;
     }
 };
-
-
-
-
