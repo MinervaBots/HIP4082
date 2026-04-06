@@ -1,7 +1,6 @@
 /*
 Cabeçalho responsável pelo controle do driver de motor HIP4082.
 */
-
 #pragma once
 
 #include <Arduino.h>
@@ -156,25 +155,41 @@ public:
 
         if (_placa == Cometa)
         {
-            // Se a potência passada for positiva, escreve esse valor no canal do pino ALI e passa o seu complemento no BLI
-            // Quando o ALI estiver mandando HIGH, o BLI estará mandando LOW
-            // Isso seria a mesma coisa que colocar uma porta NOT em um dos pinos
+            // MODO BISTATE (Apenas ALI e BLI controlam a ponte)
+            //
+            // No modo Bistate, o controle da ponte H é simplificado, usando apenas dois pinos (ALI e BLI). O chip HIP4082 faz o trabalho e entende que se ligamos a parte de baixo, ele deve desligar a de cima automaticamente (adicionando um "tempo morto" para não dar curto-circuito na bateria).
+            // ---- A REGRA DO BISTATE É INVERTIDA:
+            // - Sinal ALTO (Valor MÁXIMO do PWM): Conecta aquele lado do motor ao GND (Terra).
+            // - Sinal BAIXO (Valor ZERO do PWM): Conecta aquele lado do motor ao VDD (Bateria).
+            // * Por isso o cálculo da aceleração é invertida: para o motor girar, nós "travamos" um pino no GND (mandando o valor MÁXIMO de PWM para ele) 
+            // e aplicamos a aceleração no outro pino subtraindo a potência desejada do máximo 
+            // (MAX - potencia). Assim, quanto maior a potência que você pedir, mais próximo de ZERO o sinal fica, o que injeta mais energia da bateria no motor!
+            
+            //Olhe o gráfico do modo de funcionamento BISTATE no datasheet do HIP4082 para entender melhor o funcionamento do driver de motor nesse modo.
+            // https://www.alldatasheet.com/datasheet-pdf/view/541034/INTERSIL/HIP4082.html
+
+            
             if (potencia > 0)
             {
-                ledcWrite(_canalALI, potencia);
-                ledcWrite(_canalBLI, getValorMaximoDePotencia() - potencia);
+                // Lado B fixo no GND (BLI = MÁXIMO).
+                // Lado A recebe PWM invertido (quanto maior a potência, mais tempo próximo de 0).
+                ledcWrite(_canalALI, getValorMaximoDePotencia() - potencia);
+                ledcWrite(_canalBLI, getValorMaximoDePotencia());
             }
-
+            
             else if (potencia < 0)
             {
-                ledcWrite(_canalALI, getValorMaximoDePotencia() - potencia);
-                ledcWrite(_canalBLI, potencia);
+                // Lado A fixo no GND (ALI = MÁXIMO).
+                // Lado B recebe PWM invertido.
+                ledcWrite(_canalALI, getValorMaximoDePotencia());
+                ledcWrite(_canalBLI, getValorMaximoDePotencia() - abs(potencia));
             }
 
             else
             {
-                ledcWrite(_canalALI, 0);
-                ledcWrite(_canalBLI, 0);
+                // Para frear o motor, ambos os lados recebem o valor máximo de potência (ambos os lados desconectados)(Lembra que fica invertido).
+                ledcWrite(_canalALI, getValorMaximoDePotencia());
+                ledcWrite(_canalBLI, getValorMaximoDePotencia());
             }
         }
         // Atualiza o atributo da potência do motor com o valor da potência atual
