@@ -140,14 +140,14 @@ public:
                 // Lado B fixo no GND (BLI = MÁXIMO).
                 // Lado A recebe PWM invertido (quanto maior a potência, mais tempo próximo de 0).
                 ledcWrite(_canalALI, getValorMaximoDePotencia() - potencia);
-                ledcWrite(_canalBLI, getValorMaximoDePotencia());
+                ledcWrite(_canalBLI, potencia);
             }
             
             else if (potencia < 0)
             {
                 // Lado A fixo no GND (ALI = MÁXIMO).
                 // Lado B recebe PWM invertido.
-                ledcWrite(_canalALI, getValorMaximoDePotencia());
+                ledcWrite(_canalALI, potencia);
                 ledcWrite(_canalBLI, getValorMaximoDePotencia() - abs(potencia));
             }
 
@@ -191,25 +191,9 @@ public:
     }
 
     // Método para parar o motor
-    void parar()
+    inline void parar()
     {
-        if (_modoBistate)
-        {
-            // Freia o motor escrevendo o valor 0 no canal do pino PWMH
-            // Testar diferença com ambos os pinos em HIGH
-            ledcWrite(_canalALI, 0);
-            ledcWrite(_canalBLI, 0);
-        }
-
-        else
-        {
-            // Freia o motor escreven+do o valor 0 no canal do pino PWMH
-            ledcWrite(_canalAHI, 0);
-            ledcWrite(_canalALI, getValorMaximoDePotencia());
-            ledcWrite(_canalBHI, 0);
-            ledcWrite(_canalBLI, getValorMaximoDePotencia());
-        }
-
+        setPotencia(0);
         // Atualiza o atributo da potência do motor com o valor de potência 0
         _potencia = 0;
     }
@@ -219,7 +203,7 @@ public:
      *
      * @return O valor máximo de potência do motor.
      */
-    int getValorMaximoDePotencia()
+    int getValorMaximoDePotencia() const
     {
         return _valorMaximoDePotencia;
     }
@@ -229,7 +213,7 @@ public:
      *
      * @return O valor da potência atual do motor.
      */
-    int getPotencia()
+    int getPotencia() const
     {
         return _potencia;
     }
