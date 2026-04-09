@@ -61,7 +61,7 @@ public:
         uint8_t resolucao, 
         bool modoBistate = false)
         :
-        modoBistate(modoBistate)
+        _modoBistate(modoBistate)
     {
         if (modoBistate)
         {
