@@ -4,31 +4,63 @@
 
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
+
+#include "driver/mcpwm_timer.h"
+#include "driver/mcpwm_oper.h"
+#include "driver/mcpwm_gen.h"
+#include "driver/mcpwm_cmpr.h"
+
+typedef struct {
+    uint8_t pinoAHI;  // PWM A High-Side
+    uint8_t pinoALI;  // PWM A L Low-Side
+    uint8_t pinoBHI;  // PWM B High-Side
+    uint8_t pinoBLI;  // PWM B Low-Side
+    uint8_t canalAHI; // Canal A High-Side
+    uint8_t canalBHI; // Canal B High-Side
+    uint8_t canalALI; // Canal A Low-Side
+    uint8_t canalBLI; // Canal B Low-Side
+    bool modoBistate = false // Se ativo a classe atuará na versão do modo Bistate do driver
+} hip_config_t;
 
 // Classe para controlar motores que utilizam o driver HIP4082
-class HIP4082
-{
+class HIP4082 {
 private:
-    // Atributos que armazenam os pinos de controle do driver de motor
-    int _pinoAHI; // PWM A High-Side
-    int _pinoBHI; // PWM B High-Side
-    int _pinoALI; // PWM A Low-Side
-    int _pinoBLI; // PWM B Low-Side
 
-    // Canais PWM
-    int _canalAHI;
-    int _canalBHI;
-    int _canalALI;
-    int _canalBLI;
+    // struct com a configuração inicial para o driver (pinos, canais e modo)
+    hip_config_t config;
+
+    // Inicializando os handles do timer e dos operadores como nulos
+    mcpwm_timer_handle_t timer = nullptr;
+
+    mcpwm_oper_handle_t operA = nullptr; // Operador para o lado A da ponte H (AHI e ALI)
+    mcpwm_oper_handle_t operB = nullptr; // Operador para o lado B da ponte H (BHI e BLI)
+
+    mcpwm_gen_handle_t generatorAHI = nullptr;
+    mcpwm_gen_handle_t generatorBHI = nullptr;
+    mcpwm_gen_handle_t generatorALI = nullptr;
+    mcpwm_gen_handle_t generatorBLI = nullptr;
+
+    mcpwm_cmpr_handle_t comparatorA = nullptr;
+    mcpwm_cmpr_handle_t comparatorB = nullptr;
+
+    static uint32_t resolucaoHz = 10000000; // Resolução do timer do MCPWM [Padrão = 10MHz -> 1 tick = 0.1µs]
+    static uint32_t periodTicks = 500       // Número de ticks em um período (Cálculo para frequência -> f = res / perTicks) [Padrão = 500 -> Freq = 20kHz]
+    static uint32_t frequencia = resolucaoHz / periodTicks; // Frequência em Hz
 
     // Potencia maxma calculada a partir da resolução do PWM
-    int _valorMaximoDePotencia;
+    int valorMaximoDePotencia;
 
     // Potencia atual
-    int _potencia = 0;
+    int potencia = 0;
 
-    bool _modoBistate = false;
+    /* ------------------ Funções para gerarem erros ou warnings em compilação ------------------ */
+    void erro_resolucao_zero() __attribute__((error("ERRO: A resolucao nao pode ser 0!")));
+    void erro_frequencia_zero() __attribute__((error("ERRO: A frequencia nao pode ser 0!")));
+
+    void warning_non_const_frequencia() __attribute__((warning("AVISO: A frequencia nao foi reconhecida pelo compilador como uma constante, verifique a funcao setFrequencia eh chamada antes do metodo begin")));
+    void warning_non_const_resolucao() __attribute__((warning("AVISO: A resolucao nao foi reconhecida pelo compilador como uma constante, verifique a funcao setResolucao eh chamada antes do metodo begin")));
+
     /**
      * @brief Método para inicializar o timer do MCPWM
      */
