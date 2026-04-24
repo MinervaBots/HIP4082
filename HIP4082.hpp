@@ -29,6 +29,78 @@ private:
     int _potencia = 0;
 
     bool _modoBistate = false;
+    /**
+     * @brief Método para inicializar o timer do MCPWM
+     */
+    void initTimer() {
+        mcpwm_timer_config_t configTimer = {
+            .group_id = 0,                           // Bloco 0 do MCPWM
+            .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,  // Fonte de clock padrão (160MHz)
+            .resolution_hz = resolucaoHz,            // 10MHz (1 tick = 0.1µs)
+            .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
+            .period_ticks = periodTicks,             // 20kHz -> 10MHz / 500 = 20kHz
+        };
+
+        mcpwm_new_timer(&configTimer, &timer);
+        mcpwm_timer_enable(timer);
+        mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP);
+    }
+
+    /**
+     * @brief Método para inicializar os operadores do MCPWM e conectá-los ao timer
+     * O operador A controla os pinos AHI e ALI, enquanto o operador B controla os pinos BHI e BLI
+     * 
+     * @note Os operadores são divididos entre os lados, pois cada operador só consegue controlar 2 geradores,
+     * por isso temos 2 operadores atrelados ao mesmo timer
+     */
+    void initOperators() {
+        mcpwm_operator_config_t configOperatorA = {
+            .group_id = 0,
+        };
+
+        mcpwm_new_operator(&configOperatorA, &operA);
+        mcpwm_operator_connect_timer(operA, timer);
+
+        mcpwm_operator_config_t configOperatorB = {
+            .group_id = 0,
+        };
+
+        mcpwm_new_operator(&configOperatorB, &operB);
+        mcpwm_operator_connect_timer(operB, timer);
+    }
+
+    void initGenerator() {
+        // Se não estiver no modo bistate, configura os pinos do high-side
+        if (!config.modoBistate) {
+            mcpwm_generator_config_t configGeneratorAHI = {
+                .gen_gpio_num = static_cast<int>(config.pinoAHI),
+            };
+
+            mcpwm_generator_config_t configGeneratorBHI = {
+                .gen_gpio_num = static_cast<int>(config.pinoBHI),
+            };
+
+            mcpwm_gen_handle_t generatorAHI = nullptr;
+            mcpwm_gen_handle_t generatorBHI = nullptr;
+
+            mcpwm_new_generator(operA, &configGeneratorAHI, &generatorAHI);
+            mcpwm_new_generator(operB, &configGeneratorBHI, &generatorBHI);
+        }
+
+        mcpwm_generator_config_t configGeneratorALI = {
+            .gen_gpio_num = static_cast<int>(config.pinoALI),
+        };
+
+        mcpwm_generator_config_t configGeneratorBLI = {
+            .gen_gpio_num = static_cast<int>(config.pinoBLI),
+        };
+
+        mcpwm_gen_handle_t generatorALI = nullptr;
+        mcpwm_gen_handle_t generatorBLI = nullptr;
+
+        mcpwm_new_generator(operA, &configGeneratorALI, &generatorALI);
+        mcpwm_new_generator(operB, &configGeneratorBLI, &generatorBLI);
+    }
 
 public:
     bool motorInvertido = false;
