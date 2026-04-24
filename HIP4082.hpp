@@ -312,7 +312,7 @@ public:
      */
     int getValorMaximoDePotencia() const
     {
-        return _valorMaximoDePotencia;
+        return static_cast<int>((1 << resolucao) - 1);
     }
 
     /**
@@ -323,5 +323,15 @@ public:
     int getPotencia() const
     {
         return _potencia;
+    }
+
+    uint32_t getFrequencia() const
+    {
+        return frequencia;
+    }
+
+    uint32_t getResolucao() const
+    {
+        return resolucaoHz;
     }
 };
