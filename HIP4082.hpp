@@ -112,9 +112,6 @@ private:
                 .gen_gpio_num = static_cast<int>(config.pinoBHI),
             };
 
-            mcpwm_gen_handle_t generatorAHI = nullptr;
-            mcpwm_gen_handle_t generatorBHI = nullptr;
-
             mcpwm_new_generator(operA, &configGeneratorAHI, &generatorAHI);
             mcpwm_new_generator(operB, &configGeneratorBHI, &generatorBHI);
         }
@@ -127,11 +124,22 @@ private:
             .gen_gpio_num = static_cast<int>(config.pinoBLI),
         };
 
-        mcpwm_gen_handle_t generatorALI = nullptr;
-        mcpwm_gen_handle_t generatorBLI = nullptr;
-
         mcpwm_new_generator(operA, &configGeneratorALI, &generatorALI);
         mcpwm_new_generator(operB, &configGeneratorBLI, &generatorBLI);
+    }
+
+    void initComparator() {
+        mcpwm_comparator_config_t configComparatorA = {
+            /// @attention O update compare on timer equal zero é essencial para evitar o driver queimar com pulsos errados
+            .flags.update_cmp_on_tez = true, // Atualiza o valor do comparador no início do período
+        };
+
+        mcpwm_comparator_config_t configComparatorB = {
+            .flags.update_cmp_on_tez = true,
+        };
+
+        mcpwm_new_comparator(operA, &configComparatorA, &comparatorA);
+        mcpwm_new_comparator(operB, &configComparatorB, &comparatorB);
     }
 
 public:
