@@ -145,80 +145,75 @@ private:
 public:
     bool motorInvertido = false;
 
+    HIP4082() {}
+
+    ~HIP4082() {
+        // Desabilita o timer e os operadores ao destruir a classe
+        if (timer) {
+            mcpwm_timer_disable(timer);
+            mcpwm_del_timer(timer);
+        }
+
+        if (operA) {
+            mcpwm_del_operator(operA);
+        }
+
+        if (operB) {
+            mcpwm_del_operator(operB);
+        }
+    }
+
+    __attribute__((always_inline)) // Atributo para forçar a função a ser inline, necessário para as verificações de tempo de compilação
+    inline void setResolucao(const uint32_t novaResolucao) {
+        // Checa se o valor é uma constante reconhecida em tempo de compilação
+        if (!__builtin_constant_p(novaResolucao)) {
+            warning_non_const_resolucao();
+        }
+
+        // Checa se o valor é diferente de 0, se não, gera erro de compilação
+        if (__builtin_constant_p(novaResolucao) && novaResolucao == 0) {
+            erro_resolucao_zero(); 
+        }
+
+        // Se a nova resolução já for igual a padrão, não faz nada
+        if (novaResolucao == resolucaoHz) {
+            return;
+        }
+
+        resolucaoHz = novaResolucao;
+        periodTicks = novaResolucao / frequencia; // Atualiza o valor do periodTicks de acordo com a nova resolução
+    }
+
+    __attribute__((always_inline)) // Atributo para forçar a função a ser inline, necessário para as verificações de tempo de compilação
+    inline void setFrequencia(const uint32_t novaFrequencia) {
+        // Checa se o valor é uma constante reconhecida em tempo de compilação
+        if (!__builtin_constant_p(novaFrequencia)) {
+            warning_non_const_frequencia();
+        }
+
+        // Checa se o valor é diferente de 0, se não, gera erro de compilação
+        if (__builtin_constant_p(novaFrequencia) && novaFrequencia == 0) {
+            erro_frequencia_zero(); 
+        }
+
+        if (novaFrequencia == frequencia) {
+            return;
+        }
+
+        frequencia = novaFrequencia;
+        periodTicks = resolucaoHz / novaFrequencia;
+    }
+
     /**
-     * @brief Construtor que configura os pinos e canais PWM do driver HIP4082.
-     *
-     * @param pinoAHI Número do pino PWM A High-Side.
-     * @param pinoBHI Número do pino PWM B High-Side.
-     * @param pinoALI Número do pino PWM A Low-Side.
-     * @param pinoBLI Número do pino PWM B Low-Side.
-     * @param canalAHI Canal PWM para o pino A High-Side.
-     * @param canalBHI Canal PWM para o pino B High-Side.
-     * @param canalALI Canal PWM para o pino A Low-Side.
-     * @param canalBLI Canal PWM para o pino B Low-Side.
-     * @param frequenciaDoSinalDePWM Frequência do sinal PWM.
-     * @param resolucao Número de bits da resolução do sinal PWM (ex: 12 bits = 0 a 4095).
-     * @param placa Nome da placa que será utilizada (Unificada ou Cometa)
+     * @brief
      */
-    HIP4082(
-        uint8_t pinoAHI, 
-        uint8_t pinoBHI, 
-        uint8_t pinoALI, 
-        uint8_t pinoBLI, 
-        uint8_t canalAHI, 
-        uint8_t canalBHI, 
-        uint8_t canalALI, 
-        uint8_t canalBLI, 
-        uint32_t frequenciaDoSinalDePWM, 
-        uint8_t resolucao, 
-        bool modoBistate = false)
-        :
-        _modoBistate(modoBistate)
-    {
-        if (modoBistate)
-        {
-            _pinoALI = pinoALI;
-            _pinoBLI = pinoBLI;
-            _canalALI = canalALI;
-            _canalBLI = canalBLI;
+    void begin(const hip_config_t *config) {
+        // Atribuindo o struct passado por parâmetro ao struct membro da classe
+        this->config = config;
 
-            ledcSetup(_canalALI, frequenciaDoSinalDePWM, resolucao);
-            ledcSetup(_canalBLI, frequenciaDoSinalDePWM, resolucao);
-
-            // Anexa os canais PWM aos pinos correspondentes
-            ledcAttachPin(_pinoALI, _canalALI);
-            ledcAttachPin(_pinoBLI, _canalBLI);
-        }
-
-        else
-        {
-            _pinoAHI = pinoAHI;
-            _pinoBHI = pinoBHI;
-            _pinoALI = pinoALI;
-            _pinoBLI = pinoBLI;
-            _canalAHI = canalAHI;
-            _canalBHI = canalBHI;
-            _canalALI = canalALI;
-            _canalBLI = canalBLI;
-
-            // Configura os canais PWM
-            ledcSetup(_canalAHI, frequenciaDoSinalDePWM, resolucao);
-            ledcSetup(_canalBHI, frequenciaDoSinalDePWM, resolucao);
-            ledcSetup(_canalALI, frequenciaDoSinalDePWM, resolucao);
-            ledcSetup(_canalBLI, frequenciaDoSinalDePWM, resolucao);
-
-            // Anexa os canais PWM aos pinos correspondentes
-            ledcAttachPin(_pinoAHI, _canalAHI);
-            ledcAttachPin(_pinoBHI, _canalBHI);
-            ledcAttachPin(_pinoALI, _canalALI);
-            ledcAttachPin(_pinoBLI, _canalBLI);
-        }
-
-        // Define o valor máximo de PWM a partir da resolução passada
-        _valorMaximoDePotencia = static_cast<int>((1 << resolucao) - 1);
-
-        // Para o motor
-        parar();
+        initTimer();
+        initOperators();
+        initGenerator();
     }
 
     /**
